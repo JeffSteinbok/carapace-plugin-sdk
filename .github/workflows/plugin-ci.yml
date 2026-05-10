@@ -1,0 +1,89 @@
+name: Plugin CI
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Directory of the plugin (default is repo root)
+        type: string
+        default: .
+      node-version:
+        type: string
+        default: '20'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # npm install (not npm ci) so optional platform-specific deps (e.g. rollup
+      # native binaries) are always resolved for the current platform, regardless
+      # of whether the lockfile was generated on a different OS.
+      - run: npm install
+
+      - name: Verify plugin entry file exists and exports createEntry
+        run: |
+          set -euo pipefail
+          if [ ! -f "src/plugin.ts" ]; then
+            echo "::error::src/plugin.ts not found. The plugin entry file must be named src/plugin.ts."
+            exit 1
+          fi
+          if ! grep -q "export.*createEntry" src/plugin.ts; then
+            echo "::error::src/plugin.ts does not export 'createEntry'. The SDK requires a named export called createEntry."
+            exit 1
+          fi
+          echo "src/plugin.ts OK"
+
+      - run: npm run build
+      - run: npm test
+
+      # Validate the generated openclaw.plugin.json after build.
+      # The manifest is gitignored (generated at build time), so this must
+      # run after `npm run build` rather than as a separate checkout-only job.
+      - name: Validate openclaw.plugin.json
+        run: |
+          set -euo pipefail
+          manifest="openclaw.plugin.json"
+
+          if [ ! -f "$manifest" ]; then
+            echo "::error::$manifest not found — ensure npm run build calls carapace-generate-cli"
+            exit 1
+          fi
+
+          errors=0
+
+          id=$(jq -r '.id // empty' "$manifest")
+          name=$(jq -r '.name // empty' "$manifest")
+          entry=$(jq -r '.entry // empty' "$manifest")
+
+          if [ -z "$id" ]; then
+            echo "::error file=$manifest::Missing required field: id"
+            errors=$((errors + 1))
+          elif ! echo "$id" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+            echo "::error file=$manifest::Field 'id' must be lowercase alphanumeric with hyphens, got: $id"
+            errors=$((errors + 1))
+          fi
+
+          [ -z "$name" ]  && echo "::error file=$manifest::Missing required field: name"  && errors=$((errors + 1)) || true
+          [ -z "$entry" ] && echo "::error file=$manifest::Missing required field: entry" && errors=$((errors + 1)) || true
+
+          schema_type=$(jq -r '.configSchema.type // empty' "$manifest")
+          if [ -n "$schema_type" ] && [ "$schema_type" != "object" ]; then
+            echo "::error file=$manifest::configSchema.type must be 'object', got: $schema_type"
+            errors=$((errors + 1))
+          fi
+
+          if [ "$errors" -gt 0 ]; then
+            echo "Manifest validation failed with $errors error(s)."
+            exit 1
+          fi
+
+          echo "Manifest valid: id=$id | name=$name | entry=$entry"

@@ -1,0 +1,64 @@
+name: Plugin Validate
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Directory of the plugin (default is repo root)
+        type: string
+        default: .
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate openclaw.plugin.json
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          manifest="$PLUGIN_DIR/openclaw.plugin.json"
+
+          if [ ! -f "$manifest" ]; then
+            echo "::error file=$manifest::openclaw.plugin.json not found in $PLUGIN_DIR"
+            exit 1
+          fi
+
+          errors=0
+
+          id=$(jq -r '.id // empty' "$manifest")
+          name=$(jq -r '.name // empty' "$manifest")
+          entry=$(jq -r '.entry // empty' "$manifest")
+
+          if [ -z "$id" ]; then
+            echo "::error file=$manifest::Missing required field: id"
+            errors=$((errors + 1))
+          elif ! echo "$id" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+            echo "::error file=$manifest::Field 'id' must be lowercase alphanumeric with hyphens, got: $id"
+            errors=$((errors + 1))
+          fi
+
+          if [ -z "$name" ]; then
+            echo "::error file=$manifest::Missing required field: name"
+            errors=$((errors + 1))
+          fi
+
+          if [ -z "$entry" ]; then
+            echo "::error file=$manifest::Missing required field: entry"
+            errors=$((errors + 1))
+          fi
+
+          schema_type=$(jq -r '.configSchema.type // empty' "$manifest")
+          if [ -n "$schema_type" ] && [ "$schema_type" != "object" ]; then
+            echo "::error file=$manifest::configSchema.type must be 'object', got: $schema_type"
+            errors=$((errors + 1))
+          fi
+
+          if [ "$errors" -gt 0 ]; then
+            echo "Validation failed with $errors error(s)."
+            exit 1
+          fi
+
+          echo "Valid: id=$id | name=$name | entry=$entry"

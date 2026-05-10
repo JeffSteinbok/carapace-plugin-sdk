@@ -1,0 +1,147 @@
+name: Release SDK
+
+# Triggered manually from the GitHub Actions UI (Actions → Release SDK → Run workflow).
+# Runs the full CI suite first, then bumps the version, publishes carapace-plugin-sdk
+# to npm, and creates a draft GitHub release for you to review.
+#
+# Required secret: NPM_TOKEN — an npm publish token stored in repo settings.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version-bump:
+        description: |
+          Semver bump type:
+            patch — bug fixes, no API changes (1.0.0 → 1.0.1)
+            minor — new features, backwards compatible (1.0.0 → 1.1.0)
+            major — breaking changes (1.0.0 → 2.0.0)
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      prerelease:
+        description: |
+          Pre-release label. Leave empty for a stable release.
+          Prerelease versions publish under the label tag (e.g. "beta"), not "latest".
+        required: false
+        type: choice
+        options: ["", alpha, beta, rc]
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # Run CI before touching the version. Don't release a broken SDK.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  bump-and-publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push version-bump commit + tag + create release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ---------------------------------------------------------------------------
+      # Version calculation
+      # ---------------------------------------------------------------------------
+      - name: Calculate new version
+        id: version
+        run: |
+          set -euo pipefail
+
+          current=$(jq -r '.version' package.json)
+          pkg_name=$(jq -r '.name' package.json)
+          IFS='.' read -r major minor patch <<< "$current"
+
+          case "${{ inputs.version-bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+
+          new_version="${major}.${minor}.${patch}"
+          prerelease="${{ inputs.prerelease }}"
+
+          if [ -n "$prerelease" ]; then
+            new_version="${new_version}-${prerelease}"
+          fi
+
+          npm_tag="${prerelease:-latest}"
+          is_prerelease="$( [ -n "$prerelease" ] && echo true || echo false )"
+
+          echo "current=$current"            >> "$GITHUB_OUTPUT"
+          echo "new=$new_version"            >> "$GITHUB_OUTPUT"
+          echo "name=$pkg_name"              >> "$GITHUB_OUTPUT"
+          echo "npm_tag=$npm_tag"            >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+          echo "Version bump: $current → $new_version (npm tag: $npm_tag)"
+
+      - name: Bump version in package.json
+        run: npm version ${{ steps.version.outputs.new }} --no-git-tag-version
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit version bump and tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add package.json
+          git add package-lock.json 2>/dev/null || true
+
+          git commit -m "Bump version to ${{ steps.version.outputs.new }}"
+          git tag -a "v${{ steps.version.outputs.new }}" \
+              -m "Release v${{ steps.version.outputs.new }}"
+
+          git push
+          git push origin "v${{ steps.version.outputs.new }}"
+
+      - name: Publish to npm
+        run: npm publish --access public --tag ${{ steps.version.outputs.npm_tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release (draft)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.new }}
+          PKG_NAME: ${{ steps.version.outputs.name }}
+          NPM_TAG: ${{ steps.version.outputs.npm_tag }}
+          IS_PRERELEASE: ${{ steps.version.outputs.is_prerelease }}
+        run: |
+          prerelease_flag=""
+          [ "$IS_PRERELEASE" = "true" ] && prerelease_flag="--prerelease"
+
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --draft \
+            $prerelease_flag \
+            --notes "## v${VERSION}
+
+          ### Installation
+
+          \`\`\`bash
+          npm install ${PKG_NAME}@${NPM_TAG}
+          \`\`\`
+
+          ### Changes
+          <!-- Fill in release notes before publishing. -->
+          "

@@ -1,0 +1,39 @@
+name: Plugin Publish
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: .
+      node-version:
+        type: string
+        default: '20'
+    secrets:
+      npm-token:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
