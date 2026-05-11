@@ -14,8 +14,7 @@
     },
     "./tsup": {
       "import": "./dist/tsup.plugin.config.js"
-    },
-    "./tsconfig.base.json": "./tsconfig.base.json"
+    }
   },
   "bin": {
     "carapace-generate-cli": "./dist/generate-cli.js"
