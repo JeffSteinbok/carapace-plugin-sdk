@@ -1,20 +1,17 @@
 # 🦞🐚 carapace-plugin-sdk
 
+[![CI](https://github.com/JeffSteinbok/carapace-plugin-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/JeffSteinbok/carapace-plugin-sdk/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/carapace-plugin-sdk)](https://www.npmjs.com/package/carapace-plugin-sdk)
+
 SDK for building [OpenClaw](https://github.com/JeffSteinbok/openclaw) plugins.
 
 Define your tools and config. The SDK generates a fully typed OpenClaw plugin, a standalone CLI, and a plugin manifest — automatically.
 
 ## Install
 
-> Pre-release — not yet on npm. Install directly from GitHub:
-
-```json
-"dependencies": {
-  "carapace-plugin-sdk": "github:JeffSteinbok/carapace-plugin-sdk#main"
-}
+```bash
+npm install carapace-plugin-sdk
 ```
-
-The SDK has a `prepare` script, so `npm install` builds it automatically.
 
 ## Quick start
 
