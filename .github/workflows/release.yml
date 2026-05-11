@@ -40,13 +40,14 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # push version-bump commit + tag + create release
+      contents: write    # push version-bump commit + tag + create release
+      id-token: write    # required for npm provenance attestation
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -115,7 +116,7 @@ jobs:
           git push origin "v${{ steps.version.outputs.new }}"
 
       - name: Publish to npm
-        run: npm publish --access public --tag ${{ steps.version.outputs.npm_tag }}
+        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
