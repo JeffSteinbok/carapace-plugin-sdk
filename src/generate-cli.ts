@@ -118,7 +118,7 @@ function generateManifest(pluginEntry: {
     if (pkg.repository) {
       // Derive source from package.json repository field
       const repo = typeof pkg.repository === "string" ? pkg.repository : pkg.repository.url ?? "";
-      const match = repo.match(/github\.com[/:]([^/]+\/[^/.]+)/);
+      const match = repo.match(/(?:github\.com[/:]|^github:)([^/]+\/[^/.]+)/);
       if (match) {
         source = { canonicalRepo: match[1] };
       }
