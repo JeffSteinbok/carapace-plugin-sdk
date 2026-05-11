@@ -111,9 +111,18 @@ function generateManifest(pluginEntry: {
   // Read version from package.json in the plugin's root directory.
   // process.cwd() is the plugin root when invoked via `npm run build`.
   let version = "0.0.0";
+  let source: unknown = undefined;
   try {
     const pkg = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
     version = pkg.version ?? version;
+    if (pkg.repository) {
+      // Derive source from package.json repository field
+      const repo = typeof pkg.repository === "string" ? pkg.repository : pkg.repository.url ?? "";
+      const match = repo.match(/github\.com[/:]([^/]+\/[^/.]+)/);
+      if (match) {
+        source = { canonicalRepo: match[1] };
+      }
+    }
   } catch {
     console.warn("Warning: could not read package.json for version — defaulting to 0.0.0");
   }
@@ -137,6 +146,10 @@ function generateManifest(pluginEntry: {
 
   // activation defaults to onStartup: true if not specified.
   manifest.activation = pluginEntry.activation ?? { onStartup: true };
+
+  if (source) {
+    manifest.source = source;
+  }
 
   // openclaw is a host-specific extension block. Default to empty.
   manifest.openclaw = {};
