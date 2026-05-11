@@ -52,7 +52,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install dependencies
@@ -116,10 +115,7 @@ jobs:
           git push origin "v${{ steps.version.outputs.new }}"
 
       - name: Publish to npm
-        run: |
-          # Remove token-based auth line so npm falls back to OIDC trusted publishing
-          sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
-          npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
+        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
 
       - name: Create GitHub release (draft)
         env:
