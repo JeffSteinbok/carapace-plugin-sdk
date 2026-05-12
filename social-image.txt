@@ -1,0 +1,8 @@
+CARAPACE
+
+Plugin SDK
+
+The foundation for building OpenClaw plugins.
+Type-safe tools, config schemas, CLI generation — all from one definePlugin() call.
+
+• TypeBox Schemas  • Auto-CLI  • ESM Native  • Trusted Publishing
