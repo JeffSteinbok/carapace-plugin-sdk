@@ -1,7 +1,7 @@
 # 🦞🐚 carapace-plugin-sdk
 
 [![CI](https://github.com/JeffSteinbok/carapace-plugin-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/JeffSteinbok/carapace-plugin-sdk/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/carapace-plugin-sdk)](https://www.npmjs.com/package/carapace-plugin-sdk)
+[![npm](https://img.shields.io/npm/v/carapace-plugin-sdk?logo=npm)](https://www.npmjs.com/package/carapace-plugin-sdk)
 
 SDK for building [OpenClaw](https://github.com/JeffSteinbok/openclaw) plugins.
 
