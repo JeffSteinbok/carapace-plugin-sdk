@@ -259,6 +259,10 @@ export function formatResult(data: unknown) {
  * @param callerUrl - Pass `import.meta.url` from the generated adapter file.
  */
 export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
+  // Ensure contracts.tools is populated even for plugins using raw register().
+  // Dry-run register() with a fake API to collect tool names.
+  const enriched = ensureContracts(entry);
+
   const req = createRequire(callerUrl);
 
   try {
@@ -272,11 +276,38 @@ export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
       );
     }
 
-    return sdk.definePluginEntry(entry);
+    return sdk.definePluginEntry(enriched);
   } catch (err: unknown) {
-    if (isModuleNotFoundError(err)) return entry;
+    if (isModuleNotFoundError(err)) return enriched;
     throw err;
   }
+}
+
+/**
+ * If the entry lacks contracts.tools, dry-run register() to discover tool names.
+ */
+function ensureContracts(entry: PluginEntry): PluginEntry {
+  if (entry.contracts?.tools?.length) return entry;
+
+  try {
+    const toolNames: string[] = [];
+    const fakeApi: PluginApi = {
+      registerTool: (tool: unknown) => {
+        if (tool && typeof tool === "object" && "name" in tool) {
+          toolNames.push((tool as { name: string }).name);
+        }
+      },
+      pluginConfig: {},
+    };
+    entry.register(fakeApi);
+    if (toolNames.length > 0) {
+      entry.contracts = { tools: toolNames };
+    }
+  } catch {
+    // register() may have side effects that fail without a real API — ignore.
+  }
+
+  return entry;
 }
 
 function isModuleNotFoundError(err: unknown): boolean {
