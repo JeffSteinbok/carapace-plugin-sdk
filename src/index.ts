@@ -286,7 +286,7 @@ export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
 /**
  * If the entry lacks contracts.tools, dry-run register() to discover tool names.
  */
-function ensureContracts(entry: PluginEntry): PluginEntry {
+export function ensureContracts(entry: PluginEntry): PluginEntry {
   if (entry.contracts?.tools?.length) return entry;
 
   try {

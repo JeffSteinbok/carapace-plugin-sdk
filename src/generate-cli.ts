@@ -15,6 +15,7 @@
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve, relative, dirname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { ensureContracts } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -136,9 +137,7 @@ function generateManifest(pluginEntry: {
     entry: "./dist/adapter.js",
   };
 
-  if (pluginEntry.configSchema) {
-    manifest.configSchema = pluginEntry.configSchema;
-  }
+  manifest.configSchema = pluginEntry.configSchema ?? { type: "object", properties: {} };
 
   if (pluginEntry.contracts) {
     manifest.contracts = pluginEntry.contracts;
@@ -175,7 +174,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pluginEntry = createEntry();
+  const pluginEntry = ensureContracts(createEntry());
   const binName = name ?? pluginEntry.id;
   const envPrefix = binName.replace(/-/g, "_").toUpperCase();
 
