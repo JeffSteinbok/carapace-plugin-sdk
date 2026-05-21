@@ -64,8 +64,8 @@ Nothing else to write. No registration boilerplate, no result wrapping, no manif
 | You write | SDK handles |
 |-----------|-------------|
 | `execute()` returning a plain object | Wrapping in the OpenClaw result format |
-| `configSchema` TypeBox schema | JSON Schema for the manifest + OpenClaw settings UI |
-| Tool names | `contracts.tools` list in the manifest |
+| `configSchema` TypeBox schema | JSON Schema for the manifest + OpenClaw settings UI (defaults to an empty object schema if omitted) |
+| Tool names | `contracts.tools` list in the manifest — auto-discovered even for raw `register()` plugins |
 | `src/plugin.ts` | `dist/adapter.js`, `dist/bin/*.js`, `openclaw.plugin.json` |
 
 ## Build setup
