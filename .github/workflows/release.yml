@@ -4,7 +4,7 @@ name: Release SDK
 # Runs the full CI suite first, then bumps the version, publishes carapace-plugin-sdk
 # to npm, and creates a draft GitHub release for you to review.
 #
-# Required secret: NPM_TOKEN — an npm publish token stored in repo settings.
+# Uses npm trusted publishing (OIDC provenance) — no npm token needed.
 
 on:
   workflow_dispatch:
@@ -117,8 +117,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub release (draft)
         env:

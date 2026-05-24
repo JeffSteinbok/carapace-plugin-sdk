@@ -22,8 +22,6 @@ name: Plugin Release
 #       with:
 #         version-bump: ${{ inputs.version-bump }}
 #         prerelease: ${{ inputs.prerelease }}
-#       secrets:
-#         npm-token: ${{ secrets.NPM_TOKEN }}
 
 on:
   workflow_call:
@@ -51,10 +49,6 @@ on:
         description: Node.js version to use for install, build, and publish.
         type: string
         default: "20"
-    secrets:
-      npm-token:
-        description: npm publish token. Store as NPM_TOKEN in your repo secrets.
-        required: true
 
 jobs:
   # CI runs build + test + manifest validation (all in one job so the generated
@@ -70,7 +64,8 @@ jobs:
     needs: [ci]
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # needed to push the version-bump commit and create a release
+      contents: write   # needed to push the version-bump commit and create a release
+      id-token: write    # needed for npm trusted publishing (OIDC provenance)
 
     steps:
       - uses: actions/checkout@v4
@@ -168,12 +163,10 @@ jobs:
           git push
           git push origin "v${{ steps.version.outputs.new }}"
 
-      # Publish to npm. The NODE_AUTH_TOKEN env var is required by the
-      # setup-node registry-url configuration above.
+      # Publish to npm using trusted publishing (OIDC provenance).
+      # No npm token needed — npm verifies the GitHub Actions identity.
       - name: Publish to npm
-        run: npm publish --access public --tag ${{ steps.version.outputs.npm_tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
 
       # Create a draft GitHub release so you can review and edit release notes
       # before publishing. Promote it to published from the Releases UI.
