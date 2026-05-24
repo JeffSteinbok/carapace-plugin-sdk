@@ -48,7 +48,7 @@ on:
       node-version:
         description: Node.js version to use for install, build, and publish.
         type: string
-        default: "20"
+        default: "24"
 
 jobs:
   # CI runs build + test + manifest validation (all in one job so the generated
