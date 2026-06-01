@@ -1,10 +1,8 @@
-name: Release SDK
+name: Prepare Release
 
-# Triggered manually from the GitHub Actions UI (Actions → Release SDK → Run workflow).
-# Runs the full CI suite first, then bumps the version, publishes carapace-plugin-sdk
-# to npm, and creates a draft GitHub release for you to review.
-#
-# Uses npm trusted publishing (OIDC provenance) — no npm token needed.
+# Triggered manually from the GitHub Actions UI (Actions → Prepare Release → Run workflow).
+# Runs the full CI suite, bumps the version, and creates a draft GitHub release.
+# npm publish happens automatically when you publish the draft release (see publish.yml).
 
 on:
   workflow_dispatch:
@@ -32,16 +30,14 @@ permissions:
   contents: read
 
 jobs:
-  # Run CI before touching the version. Don't release a broken SDK.
   ci:
     uses: ./.github/workflows/ci.yml
 
-  bump-and-publish:
+  prepare:
     needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write    # push version-bump commit + tag + create release
-      id-token: write    # required for npm provenance attestation
 
     steps:
       - uses: actions/checkout@v4
@@ -53,10 +49,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build
+        run: npm run build
 
       # ---------------------------------------------------------------------------
       # Version calculation
@@ -97,9 +95,6 @@ jobs:
       - name: Bump version in package.json
         run: npm version ${{ steps.version.outputs.new }} --no-git-tag-version
 
-      - name: Build
-        run: npm run build
-
       - name: Commit version bump and tag
         run: |
           git config user.name  "github-actions[bot]"
@@ -114,9 +109,6 @@ jobs:
 
           git push
           git push origin "v${{ steps.version.outputs.new }}"
-
-      - name: Publish to npm
-        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
 
       - name: Create GitHub release (draft)
         env:

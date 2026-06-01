@@ -1,0 +1,51 @@
+name: Publish SDK to npm
+
+# Triggered automatically when a draft GitHub release is published.
+# The "Prepare Release" workflow (release.yml) creates the draft;
+# this workflow handles the actual npm publish once you review and publish it.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write    # required for npm provenance attestation
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Determine npm tag
+        id: npm-tag
+        run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          if [[ "$version" == *-alpha* ]]; then
+            echo "tag=alpha" >> "$GITHUB_OUTPUT"
+          elif [[ "$version" == *-beta* ]]; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          elif [[ "$version" == *-rc* ]]; then
+            echo "tag=rc" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance --tag ${{ steps.npm-tag.outputs.tag }}
