@@ -276,7 +276,12 @@ export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
       );
     }
 
-    return sdk.definePluginEntry(enriched);
+    const defined = sdk.definePluginEntry(enriched) as Record<string, unknown>;
+    // definePluginEntry may strip contracts — preserve them from the enriched entry.
+    if (enriched.contracts && !defined.contracts) {
+      defined.contracts = enriched.contracts;
+    }
+    return defined;
   } catch (err: unknown) {
     if (isModuleNotFoundError(err)) return enriched;
     throw err;
