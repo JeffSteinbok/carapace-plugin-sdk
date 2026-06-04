@@ -1,6 +1,6 @@
 {
   "name": "carapace-plugin-sdk",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "🦞🐚 SDK for building OpenClaw plugins — types, helpers, CLI generation",
   "repository": {
     "type": "git",
