@@ -15,7 +15,7 @@
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve, relative, dirname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ensureContracts } from "./index.js";
+import type { PluginEntry } from "./index.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -174,7 +174,14 @@ async function main() {
     process.exit(1);
   }
 
-  const pluginEntry = ensureContracts(createEntry());
+  const pluginEntry = createEntry() as PluginEntry;
+  if (!pluginEntry.contracts?.tools?.length) {
+    console.error(
+      `Error: plugin "${pluginEntry.id ?? pluginEntry.name}" is missing contracts.tools. ` +
+      `Migrate to definePlugin() from carapace-plugin-sdk.`,
+    );
+    process.exit(1);
+  }
   const binName = name ?? pluginEntry.id;
   const envPrefix = binName.replace(/-/g, "_").toUpperCase();
 

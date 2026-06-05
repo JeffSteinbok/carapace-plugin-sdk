@@ -259,9 +259,14 @@ export function formatResult(data: unknown) {
  * @param callerUrl - Pass `import.meta.url` from the generated adapter file.
  */
 export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
-  // Ensure contracts.tools is populated even for plugins using raw register().
-  // Dry-run register() with a fake API to collect tool names.
-  const enriched = ensureContracts(entry);
+  // v2: contracts.tools is required — plugins must declare tools via definePlugin
+  // or set contracts.tools explicitly. The ensureContracts fallback has been removed.
+  if (!entry.contracts?.tools?.length) {
+    throw new Error(
+      `Plugin "${entry.id ?? entry.name}" is missing contracts.tools. ` +
+      `Migrate to definePlugin() from carapace-plugin-sdk — see https://github.com/JeffSteinbok/carapace-plugin-sdk`,
+    );
+  }
 
   const req = createRequire(callerUrl);
 
@@ -276,43 +281,16 @@ export function createAdapter(entry: PluginEntry, callerUrl: string): unknown {
       );
     }
 
-    const defined = sdk.definePluginEntry(enriched) as Record<string, unknown>;
-    // definePluginEntry may strip contracts — preserve them from the enriched entry.
-    if (enriched.contracts && !defined.contracts) {
-      defined.contracts = enriched.contracts;
+    const defined = sdk.definePluginEntry(entry) as Record<string, unknown>;
+    // definePluginEntry may strip contracts — preserve them from the entry.
+    if (entry.contracts && !defined.contracts) {
+      defined.contracts = entry.contracts;
     }
     return defined;
   } catch (err: unknown) {
-    if (isModuleNotFoundError(err)) return enriched;
+    if (isModuleNotFoundError(err)) return entry;
     throw err;
   }
-}
-
-/**
- * If the entry lacks contracts.tools, dry-run register() to discover tool names.
- */
-export function ensureContracts(entry: PluginEntry): PluginEntry {
-  if (entry.contracts?.tools?.length) return entry;
-
-  try {
-    const toolNames: string[] = [];
-    const fakeApi: PluginApi = {
-      registerTool: (tool: unknown) => {
-        if (tool && typeof tool === "object" && "name" in tool) {
-          toolNames.push((tool as { name: string }).name);
-        }
-      },
-      pluginConfig: {},
-    };
-    entry.register(fakeApi);
-    if (toolNames.length > 0) {
-      entry.contracts = { tools: toolNames };
-    }
-  } catch {
-    // register() may have side effects that fail without a real API — ignore.
-  }
-
-  return entry;
 }
 
 function isModuleNotFoundError(err: unknown): boolean {
