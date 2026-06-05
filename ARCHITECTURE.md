@@ -75,7 +75,7 @@ tsup && carapace-generate-cli --entry ./dist/plugin.js --out ./dist/bin
 The generator:
 
 1. **Imports** `dist/plugin.js` and calls `createEntry()`
-2. **Enriches the entry** — calls `ensureContracts()` to auto-discover `contracts.tools` for plugins that use raw `register()` instead of `definePlugin`
+2. **Validates the entry** — requires `contracts.tools` to be populated (all plugins must use `definePlugin` as of SDK v2)
 3. **Reads metadata** — `id`, `name`, `description`, `configSchema`, `contracts`, `activation`
 4. **Defaults `configSchema`** — if the entry has no `configSchema`, the manifest gets `{ type: "object", properties: {} }` so OpenClaw always has a valid schema
 5. **Emits three files:**
@@ -102,7 +102,7 @@ import { createEntry } from "./plugin.js";
 export default createAdapter(createEntry(), import.meta.url);
 ```
 
-`createAdapter()` calls `ensureContracts()` to auto-discover tool names (via a dry-run `register()`) for plugins that don't declare `contracts` upfront, then tries to load the optional `openclaw` peer dependency. If found, it wraps the enriched entry with the host's `definePluginEntry()`. If not (standalone CLI mode), it returns the raw entry. The `import.meta.url` is passed so the resolution happens relative to the plugin's own `node_modules`, not the SDK's — important in monorepo setups where packages may be hoisted.
+`createAdapter()` validates that `contracts.tools` is populated (required as of v2 — plugins must use `definePlugin`), then tries to load the optional `openclaw` peer dependency. If found, it wraps the entry with the host's `definePluginEntry()`. If not (standalone CLI mode), it returns the raw entry. The `import.meta.url` is passed so the resolution happens relative to the plugin's own `node_modules`, not the SDK's — important in monorepo setups where packages may be hoisted.
 
 ### `openclaw.plugin.json` — manifest
 

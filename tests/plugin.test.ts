@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Type } from "@sinclair/typebox";
-import { formatResult, definePlugin, ensureContracts, type PluginEntry } from "../src/index.js";
+import { formatResult, definePlugin, type PluginEntry } from "../src/index.js";
 
 // ---------------------------------------------------------------------------
 // formatResult
@@ -100,88 +100,11 @@ describe("definePlugin", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ensureContracts
+// createAdapter — contracts validation (v2 breaking change)
 // ---------------------------------------------------------------------------
 
-describe("ensureContracts", () => {
-  it("returns entry unchanged when contracts.tools is already populated", () => {
-    const entry: PluginEntry = {
-      id: "already-set",
-      name: "Already Set",
-      contracts: { tools: ["existing_tool"] },
-      register() {},
-    };
-    const result = ensureContracts(entry);
-    expect(result.contracts?.tools).toEqual(["existing_tool"]);
-    expect(result).toBe(entry); // same reference — no mutation
-  });
-
-  it("discovers tool names from register() when contracts is missing", () => {
-    const entry: PluginEntry = {
-      id: "no-contracts",
-      name: "No Contracts",
-      register(api) {
-        api.registerTool({ name: "tool_a", execute: async () => ({}) });
-        api.registerTool({ name: "tool_b", execute: async () => ({}) });
-      },
-    };
-    const result = ensureContracts(entry);
-    expect(result.contracts?.tools).toEqual(["tool_a", "tool_b"]);
-  });
-
-  it("discovers tool names when contracts.tools is an empty array", () => {
-    const entry: PluginEntry = {
-      id: "empty-tools",
-      name: "Empty Tools",
-      contracts: { tools: [] },
-      register(api) {
-        api.registerTool({ name: "discovered" });
-      },
-    };
-    const result = ensureContracts(entry);
-    expect(result.contracts?.tools).toEqual(["discovered"]);
-  });
-
-  it("skips tools registered without a name property", () => {
-    const entry: PluginEntry = {
-      id: "nameless",
-      name: "Nameless",
-      register(api) {
-        api.registerTool({ description: "no name field" });
-        api.registerTool({ name: "valid_tool" });
-      },
-    };
-    const result = ensureContracts(entry);
-    expect(result.contracts?.tools).toEqual(["valid_tool"]);
-  });
-
-  it("handles register() that throws without crashing", () => {
-    const entry: PluginEntry = {
-      id: "throws",
-      name: "Throws",
-      register() {
-        throw new Error("boom");
-      },
-    };
-    const result = ensureContracts(entry);
-    // contracts remains unset since register() failed
-    expect(result.contracts).toBeUndefined();
-  });
-
-  it("does not set contracts when register() registers no tools", () => {
-    const entry: PluginEntry = {
-      id: "no-tools",
-      name: "No Tools",
-      register() {
-        // intentionally registers nothing
-      },
-    };
-    const result = ensureContracts(entry);
-    expect(result.contracts).toBeUndefined();
-  });
-
-  it("works end-to-end with a definePlugin entry that omits contracts", () => {
-    // definePlugin always sets contracts, but ensureContracts should still be a no-op
+describe("createAdapter contracts enforcement", () => {
+  it("definePlugin always provides contracts — createEntry().contracts.tools is populated", () => {
     const createEntry = definePlugin({
       id: "defined",
       name: "Defined",
@@ -196,7 +119,6 @@ describe("ensureContracts", () => {
       ],
     });
     const entry = createEntry();
-    const result = ensureContracts(entry);
-    expect(result.contracts?.tools).toEqual(["my_tool"]);
+    expect(entry.contracts?.tools).toEqual(["my_tool"]);
   });
 });
