@@ -185,6 +185,7 @@ jobs:
             --title "v${VERSION}" \
             --draft \
             $prerelease_flag \
+            --generate-notes \
             --notes "## v${VERSION}
 
           ### Installation
@@ -192,7 +193,4 @@ jobs:
           \`\`\`bash
           npm install ${PKG_NAME}@${NPM_TAG}
           \`\`\`
-
-          ### Changes
-          <!-- Fill in release notes before publishing. -->
           "
