@@ -2,7 +2,10 @@ name: Plugin Release
 
 # Reusable workflow — call this from your plugin repo's release.yml.
 # Runs CI + manifest validation first, then bumps the version in package.json,
-# commits and tags the bump, publishes to npm, and creates a draft GitHub release.
+# commits and tags the bump, and creates a draft GitHub release.
+#
+# npm publish happens in a separate publish.yml triggered by "release: published",
+# so you can review and edit the draft release notes before anything is published to npm.
 #
 # Usage in your repo's .github/workflows/release.yml:
 #
@@ -22,6 +25,18 @@ name: Plugin Release
 #       with:
 #         version-bump: ${{ inputs.version-bump }}
 #         prerelease: ${{ inputs.prerelease }}
+#
+# Also add .github/workflows/publish.yml to your repo:
+#
+#   on:
+#     release:
+#       types: [published]
+#
+#   jobs:
+#     publish:
+#       uses: JeffSteinbok/carapace-plugin-sdk/.github/workflows/plugin-publish.yml@main
+#       secrets:
+#         npm-token: ${{ secrets.NPM_TOKEN }}
 
 on:
   workflow_call:
@@ -58,14 +73,14 @@ jobs:
     with:
       node-version: ${{ inputs.node-version }}
 
-  # Bump the version, publish to npm, and create a GitHub release.
+  # Bump the version and create a draft GitHub release.
+  # npm publish happens in a separate publish.yml triggered by "release: published".
   # Only runs after CI succeeds.
   release:
     needs: [ci]
     runs-on: ubuntu-latest
     permissions:
       contents: write   # needed to push the version-bump commit and create a release
-      id-token: write    # needed for npm trusted publishing (OIDC provenance)
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +93,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install dependencies
@@ -163,13 +177,9 @@ jobs:
           git push
           git push origin "v${{ steps.version.outputs.new }}"
 
-      # Publish to npm using trusted publishing (OIDC provenance).
-      # No npm token needed — npm verifies the GitHub Actions identity.
-      - name: Publish to npm
-        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.npm_tag }}
-
       # Create a draft GitHub release so you can review and edit release notes
       # before publishing. Promote it to published from the Releases UI.
+      # Publishing the release triggers publish.yml which publishes to npm.
       - name: Create GitHub release (draft)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
