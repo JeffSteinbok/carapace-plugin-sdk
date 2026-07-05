@@ -174,9 +174,9 @@ Manifest validation runs **after build** (not as a separate job) because the man
 
 ### `plugin-release.yml`
 
-Triggered by `workflow_dispatch`. Runs CI first, then on success: bumps `package.json` version, commits + tags, publishes to npm, creates a draft GitHub release.
+Triggered by `workflow_dispatch`. Runs CI first, then on success: bumps `package.json` version, commits + tags, and creates a draft GitHub release.
 
-Prerelease labels (`alpha`, `beta`, `rc`) publish under that npm dist-tag instead of `latest`, so stable installs are unaffected.
+Prerelease labels (`alpha`, `beta`, `rc`) set the draft as a pre-release in GitHub. npm publish happens separately when the draft is promoted to published (see `plugin-publish.yml`).
 
 ### `plugin-validate.yml`
 

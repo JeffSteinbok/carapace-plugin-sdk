@@ -125,6 +125,8 @@ jobs:
 
 ```yaml
 # .github/workflows/release.yml
+# Bumps the version, commits + tags, and creates a draft GitHub release.
+# Review and edit the draft, then publish it to trigger npm publish.
 on:
   workflow_dispatch:
     inputs:
@@ -140,6 +142,17 @@ jobs:
     with:
       version-bump: ${{ inputs.version-bump }}
       prerelease: ${{ inputs.prerelease }}
+```
+
+```yaml
+# .github/workflows/publish.yml
+# Publishes to npm when the draft GitHub release is promoted to published.
+on:
+  release:
+    types: [published]
+jobs:
+  publish:
+    uses: JeffSteinbok/carapace-plugin-sdk/.github/workflows/plugin-publish.yml@main
     secrets:
       npm-token: ${{ secrets.NPM_TOKEN }}
 ```
