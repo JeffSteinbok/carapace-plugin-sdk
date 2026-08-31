@@ -8,8 +8,9 @@ on:
         type: string
         default: .
       node-version:
+        description: Node major version to test against (needs 22.5+ for node:sqlite)
         type: string
-        default: '20'
+        default: '24'
 
 jobs:
   build-and-test:
