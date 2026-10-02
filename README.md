@@ -63,10 +63,16 @@ Nothing else to write. No registration boilerplate, no result wrapping, no manif
 
 | You write | SDK handles |
 |-----------|-------------|
-| `execute()` returning a plain object | Wrapping in the OpenClaw result format |
+| `execute()` returning a plain object | Wrapping in the OpenClaw result format: JSON text in `content` for the model, the structured value in `details` for Code Mode scripts |
 | `configSchema` TypeBox schema | JSON Schema for the manifest + OpenClaw settings UI (defaults to an empty object schema if omitted) |
 | Tool names | `contracts.tools` list in the manifest — auto-discovered even for raw `register()` plugins |
 | `src/plugin.ts` | `dist/adapter.js`, `dist/bin/*.js`, `openclaw.plugin.json` |
+
+### Result grading (v3)
+
+Since v3, the value you return is also the result's `details`. OpenClaw grades a tool call from `details`, so a top-level `error` (truthy), `ok: false`, `success: false`, `timedOut: true`, nonzero `exitCode`, or a failure-word `status` (`"failed"`, `"unavailable"`, `"disabled"`, `"cancelled"`, `"invalid"`, …) marks the call failed. Return those keys only to signal failure; put domain values that use these names under a wrapper key (`{ shipment: { status } }`).
+
+Upgrading from v2 needs no code changes unless a tool returns one of those keys as ordinary data.
 
 ## Build setup
 

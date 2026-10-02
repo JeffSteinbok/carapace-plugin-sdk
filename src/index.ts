@@ -222,23 +222,38 @@ export interface PluginEntry {
  * For advanced plugins that implement `register()` directly, wrap your
  * execute return values with this function.
  *
+ * Both fields carry the result: `content` is the text the model reads on a
+ * direct tool call, and `details` is the structured value. OpenClaw Code Mode
+ * hands `details` (not `content`) to the calling script, and grades the call
+ * from it — so a top-level `ok: false`, truthy `error`, or failure-word
+ * `status` (e.g. "failed", "unavailable") marks the call failed.
+ *
  * @param data - Anything JSON-serialisable, or a plain string.
- * @returns `{ content: [{ type: "text", text: "<json>" }], details: {} }`
+ * @returns `{ content: [{ type: "text", text: "<json>" }], details: <data> }`
  */
 export function formatResult(data: unknown) {
   let text: string;
+  let details: unknown = {};
   if (typeof data === "string") {
     text = data;
+    details = data;
   } else {
     try {
-      text = JSON.stringify(data) ?? String(data);
+      const json = JSON.stringify(data);
+      if (json === undefined) {
+        text = String(data);
+      } else {
+        text = json;
+        // Round-trip so details matches content exactly (Dates as strings, no functions).
+        details = JSON.parse(json);
+      }
     } catch {
       text = String(data);
     }
   }
   return {
     content: [{ type: "text" as const, text }],
-    details: {},
+    details,
   };
 }
 
