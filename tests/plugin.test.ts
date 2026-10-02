@@ -19,8 +19,28 @@ describe("formatResult", () => {
     expect(result.content[0].text).toBe("hello");
   });
 
-  it("includes an empty details object", () => {
-    expect(formatResult(null).details).toEqual({});
+  it("carries the structured value in details", () => {
+    expect(formatResult({ price: 42, symbol: "AAPL" }).details).toEqual({ price: 42, symbol: "AAPL" });
+    expect(formatResult([1, 2]).details).toEqual([1, 2]);
+    expect(formatResult(null).details).toBeNull();
+  });
+
+  it("carries strings in details unchanged", () => {
+    expect(formatResult("hello").details).toBe("hello");
+  });
+
+  it("keeps details JSON-equivalent to content", () => {
+    const when = new Date("2026-10-01T00:00:00Z");
+    const result = formatResult({ when, fn: () => 1 });
+    expect(result.details).toEqual(JSON.parse(result.content[0].text));
+    expect(result.details).toEqual({ when: "2026-10-01T00:00:00.000Z" });
+  });
+
+  it("falls back to empty details when the value is not serialisable", () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(formatResult(cyclic).details).toEqual({});
+    expect(formatResult(undefined).details).toEqual({});
   });
 });
 

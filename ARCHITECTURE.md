@@ -60,7 +60,7 @@ definePlugin<TConfigSchema extends TObject>
 
 ### What happens at runtime
 
-The `tool()` factory is literally `(def) => def`. No transformation. The `definePlugin` call collects the tool defs into an array when `createEntry()` is invoked, then `register(api)` iterates them and calls `api.registerTool()` for each one, wrapping `execute` to call `formatResult()` automatically.
+The `tool()` factory is literally `(def) => def`. No transformation. The `definePlugin` call collects the tool defs into an array when `createEntry()` is invoked, then `register(api)` iterates them and calls `api.registerTool()` for each one, wrapping `execute` to call `formatResult()` automatically. `formatResult()` puts the value in both `content` (JSON text the model reads) and `details` (the structured value OpenClaw Code Mode returns to scripts and grades the call from).
 
 ---
 
