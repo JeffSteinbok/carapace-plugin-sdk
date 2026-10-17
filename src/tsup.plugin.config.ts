@@ -43,7 +43,9 @@ type PluginConfigOverrides = Record<string, unknown>;
  *   - clean: true (remove stale dist files before each build)
  *   - target: node20
  *   - splitting, shims: false (keeps output simple and portable)
- *   - skipNodeModulesBundle: true (dependencies are not inlined)
+ *   - skipNodeModulesBundle: true (dependencies are not inlined), except
+ *     noExternal: @sinclair/typebox, which is inlined so packed installs don't
+ *     each ship their own ~1,100-file copy of it
  *
  * Note: `src/adapter.ts` is intentionally NOT in the default entry list.
  * The adapter (`dist/adapter.js`) is generated at build time by
@@ -63,6 +65,7 @@ export function definePluginConfig(overrides: PluginConfigOverrides = {}): Plugi
     splitting: false,
     shims: false,
     skipNodeModulesBundle: true,
+    noExternal: [/^@sinclair\/typebox(\/|$)/],
     ...overrides,
   };
 }

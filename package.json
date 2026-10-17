@@ -47,12 +47,18 @@
     "@types/node": "^22",
     "tsup": "^8.3.0",
     "typescript": "^5.7",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "@sinclair/typebox": "^0.34.0"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@sinclair/typebox": "^0.34.0"
+  },
+  "peerDependenciesMeta": {
+    "@sinclair/typebox": {
+      "optional": true
+    }
   }
 }
