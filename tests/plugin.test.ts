@@ -120,6 +120,111 @@ describe("definePlugin", () => {
 });
 
 // ---------------------------------------------------------------------------
+// definePlugin — tool factories and the per-call context (v3.1)
+// ---------------------------------------------------------------------------
+
+describe("definePlugin tool factories", () => {
+  const seen: unknown[] = [];
+  const createEntry = definePlugin({
+    id: "ctx-plugin",
+    name: "Ctx Plugin",
+    tools: (tool) => [
+      tool({
+        name: "whoami",
+        description: "Echo the call context.",
+        parameters: Type.Object({}),
+        execute: async (_params, _config, ctx) => {
+          seen.push(ctx);
+          return { agent: ctx.agentId ?? null, sender: ctx.requesterSenderId ?? null };
+        },
+      }),
+      tool({
+        name: "legacy",
+        description: "Ignores ctx.",
+        parameters: Type.Object({}),
+        execute: async () => ({ ok: true }),
+      }),
+    ],
+  });
+
+  function register(logger?: { warn: (m: string) => void }) {
+    const calls: Array<{ tool: any; opts: any }> = [];
+    createEntry().register({
+      registerTool: (tool: any, opts?: any) => { calls.push({ tool, opts }); },
+      pluginConfig: {},
+      logger,
+    });
+    return calls;
+  }
+
+  it("registers each tool as a factory with its name in opts", () => {
+    const calls = register();
+    expect(calls.map((c) => typeof c.tool)).toEqual(["function", "function"]);
+    expect(calls.map((c) => c.opts)).toEqual([{ name: "whoami" }, { name: "legacy" }]);
+  });
+
+  it("factories also carry the static tool shape for older hosts and wrappers", async () => {
+    const [{ tool }] = register();
+    expect(tool.name).toBe("whoami");
+    expect(tool.label).toBe("whoami");
+    expect(tool.description).toBe("Echo the call context.");
+    const result = await tool.execute("id", {});
+    expect(result.details).toEqual({ agent: null, sender: null });
+  });
+
+  it("passes a frozen context built from the trusted tool context", async () => {
+    seen.length = 0;
+    const [{ tool }] = register();
+    const concrete = tool({
+      agentId: "family",
+      sessionKey: "agent:family:imessage:direct:+14255550100",
+      messageChannel: "iMessage",
+      requesterSenderId: "+14255550100",
+      senderIsOwner: false,
+      sandboxed: false,
+      getRuntimeConfig: () => ({ accessGroups: { kids: { type: "message.senders", members: {} } } }),
+    });
+    expect(concrete.name).toBe("whoami");
+    const result = await concrete.execute("call", {});
+    expect(result.details).toEqual({ agent: "family", sender: "+14255550100" });
+    const ctx = seen[0] as Record<string, unknown>;
+    expect(Object.isFrozen(ctx)).toBe(true);
+    expect(ctx).toEqual({
+      agentId: "family",
+      sessionKey: "agent:family:imessage:direct:+14255550100",
+      messageChannel: "imessage",
+      requesterSenderId: "+14255550100",
+      senderIsOwner: false,
+      accessGroups: { kids: { type: "message.senders", members: {} } },
+    });
+    expect(ctx).not.toHaveProperty("sandboxed");
+  });
+
+  it("falls back from getRuntimeConfig to runtimeConfig to config for accessGroups", async () => {
+    seen.length = 0;
+    const [{ tool }] = register();
+    await tool({ runtimeConfig: { accessGroups: { a: {} } }, config: { accessGroups: { b: {} } } }).execute("x", {});
+    await tool({ config: { accessGroups: { b: {} } } }).execute("x", {});
+    await tool({ getRuntimeConfig: () => { throw new Error("boom"); }, config: { accessGroups: { c: {} } } }).execute("x", {});
+    expect((seen as any[]).map((c) => Object.keys(c.accessGroups))).toEqual([["a"], ["b"], ["c"]]);
+  });
+
+  it("tools that ignore ctx keep working through the factory", async () => {
+    const [, { tool }] = register();
+    expect((await tool(undefined).execute("x", {})).details).toEqual({ ok: true });
+    expect((await tool.execute("x", {})).details).toEqual({ ok: true });
+  });
+
+  it("exposes the host logger on ctx", async () => {
+    seen.length = 0;
+    const logger = { warn: () => {} };
+    const [{ tool }] = register(logger);
+    await tool({ agentId: "main" }).execute("x", {});
+    expect((seen[0] as any).logger).toBe(logger);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // createAdapter — contracts validation (v2 breaking change)
 // ---------------------------------------------------------------------------
 

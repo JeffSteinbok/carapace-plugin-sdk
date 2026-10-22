@@ -15,6 +15,15 @@
 
 import { createRequire } from "node:module";
 import { type TObject, type Static } from "@sinclair/typebox";
+import {
+  buildToolCallContext,
+  EMPTY_TOOL_CALL_CONTEXT,
+  type HostToolContext,
+  type ToolCallContext,
+  type ToolLogger,
+} from "./access.js";
+
+export * from "./access.js";
 
 // ---------------------------------------------------------------------------
 // definePlugin — the primary authoring API
@@ -29,7 +38,7 @@ interface ToolDef {
   label?: string;
   description: string;
   parameters: unknown;
-  execute(params: Record<string, unknown>, config: unknown): Promise<unknown>;
+  execute(params: Record<string, unknown>, config: unknown, ctx: ToolCallContext): Promise<unknown>;
 }
 
 /**
@@ -58,9 +67,12 @@ type ToolFactory<TConfig> = <TSchema extends TObject>(def: {
    *
    * @param params - Typed parameters derived from `parameters` schema. No casts needed.
    * @param config - Typed config derived from `definePlugin`'s `configSchema`. No casts needed.
+   * @param ctx - Trusted, frozen per-call context from the OpenClaw runtime (agent id,
+   *   message channel, verified sender, owner bit, root-config `accessGroups`). Fields
+   *   are absent in the standalone CLI. Use with `checkAccess()`. Optional to declare.
    * @returns Any JSON-serialisable value. The SDK wraps it in the OpenClaw result format.
    */
-  execute(params: Static<TSchema>, config: TConfig): Promise<unknown>;
+  execute(params: Static<TSchema>, config: TConfig, ctx: ToolCallContext): Promise<unknown>;
 }) => ToolDef;
 
 /**
@@ -143,20 +155,50 @@ export function definePlugin<TConfigSchema extends TObject = TObject>(def: {
         // so this cast is safe. Fall back to empty object if config is not yet set.
         const config = (api.pluginConfig ?? {}) as Static<TConfigSchema>;
 
+        const logger = api.logger;
+
         for (const toolDef of toolDefs) {
-          api.registerTool({
-            name: toolDef.name,
-            label: toolDef.label ?? toolDef.name,
-            description: toolDef.description,
-            parameters: toolDef.parameters,
-            // Wrap the result automatically — execute() returns plain values, not formatResult().
-            execute: async (_toolCallId: string, params: Record<string, unknown>) =>
-              formatResult(await toolDef.execute(params, config)),
-          });
+          api.registerTool(createToolFactory(toolDef, config, logger), { name: toolDef.name });
         }
       },
     };
   };
+}
+
+/**
+ * Build the value passed to `api.registerTool` for one tool.
+ *
+ * OpenClaw only hands the trusted runtime context (agent, sender, channel) to
+ * tool FACTORIES, so each tool is registered as a factory
+ * `(toolContext) => tool` whose `execute` forwards a {@link ToolCallContext}.
+ *
+ * For backward compatibility the factory function also carries the static tool
+ * shape (`name`, `label`, `description`, `parameters`, and an `execute` that
+ * runs with an empty context). Hosts that inspect `tool.name`, wrappers that
+ * filter registrations by name, the standalone CLI, and test harnesses that
+ * call `tool.execute(id, params)` directly all keep working unchanged.
+ */
+function createToolFactory(toolDef: ToolDef, config: unknown, logger: ToolLogger | undefined) {
+  const makeTool = (resolveCtx: () => ToolCallContext) => ({
+    name: toolDef.name,
+    label: toolDef.label ?? toolDef.name,
+    description: toolDef.description,
+    parameters: toolDef.parameters,
+    // Wrap the result automatically — execute() returns plain values, not formatResult().
+    execute: async (_toolCallId: string, params: Record<string, unknown>) =>
+      formatResult(await toolDef.execute(params, config, resolveCtx())),
+  });
+
+  // The context is resolved per call so accessGroups come from the live runtime config.
+  const factory = (toolContext?: HostToolContext) =>
+    makeTool(() => buildToolCallContext(toolContext, logger));
+
+  const staticTool = makeTool(() => (logger ? buildToolCallContext(undefined, logger) : EMPTY_TOOL_CALL_CONTEXT));
+  for (const [key, value] of Object.entries(staticTool)) {
+    // `name` is a read-only (but configurable) Function property, so define rather than assign.
+    Object.defineProperty(factory, key, { value, enumerable: true, configurable: true, writable: true });
+  }
+  return factory as typeof factory & typeof staticTool;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,8 +215,14 @@ export function definePlugin<TConfigSchema extends TObject = TObject>(def: {
  * It is exported for advanced use cases and for the generated adapter.
  */
 export type PluginApi = {
-  /** Register a tool with OpenClaw. Call once per tool inside register(). */
-  registerTool: (tool: unknown) => void;
+  /**
+   * Register a tool (or tool factory) with OpenClaw. Call once per tool inside register().
+   * `definePlugin` registers factories and passes `{ name }` so the host can match
+   * the factory to `contracts.tools`; wrappers should forward `opts` unchanged.
+   */
+  registerTool: (tool: unknown, opts?: { name?: string; names?: string[]; optional?: boolean }) => void;
+  /** Plugin-scoped logger provided by the host, when available. */
+  logger?: ToolLogger;
   /**
    * The user's config values for this plugin, keyed by field name.
    * Validated against configSchema by OpenClaw before register() is called.
