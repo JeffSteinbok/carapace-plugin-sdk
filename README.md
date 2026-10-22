@@ -74,6 +74,83 @@ Since v3, the value you return is also the result's `details`. OpenClaw grades a
 
 Upgrading from v2 needs no code changes unless a tool returns one of those keys as ordinary data.
 
+## Call context and access control (v3.1)
+
+Every tool's `execute` receives a third argument, `ctx`: a small frozen object
+built from the trusted context OpenClaw hands to tool factories. It is never
+derived from tool arguments.
+
+| Field | Meaning |
+|-------|---------|
+| `agentId` | Agent running the tool (`"main"`, `"family"`, …) |
+| `sessionKey` | Session key of the turn |
+| `messageChannel` | Inbound channel (`"imessage"`, `"discord"`, …), lowercased |
+| `requesterSenderId` | Verified sender id. Absent for cron, CLI and heartbeat turns |
+| `senderIsOwner` | Trusted owner bit |
+| `accessGroups` | `accessGroups` from the live OpenClaw root config |
+| `logger` | The plugin logger, when the host provides one |
+
+Tools that don't declare `ctx` keep working. In the standalone CLI every field is absent.
+
+To support this, `definePlugin` registers each tool as a factory,
+`api.registerTool((toolContext) => tool, { name })`. The factory function also
+carries the static tool shape (`name`, `description`, `parameters`, `execute`),
+so wrappers that read `tool.name` and test harnesses that call
+`tool.execute(id, params)` directly don't need changes. A wrapper around
+`api.registerTool` should forward the second `opts` argument.
+
+### `checkAccess`
+
+`checkAccess(access, kind, id, op, ctx)` gates one resource against an `access`
+block in the plugin's config:
+
+```json
+"access": {
+  "calendars": {
+    "family":   { "read": ["*"], "write": ["*"] },
+    "personal": { "read": [{ "agent": "main" }, { "sender": "jeff" }], "write": [{ "agent": "main" }] }
+  }
+}
+```
+
+```ts
+import { checkAccess, ACCESS_CONFIG_SCHEMA, type AccessConfig } from "carapace-plugin-sdk";
+
+configSchema: Type.Object({
+  access: Type.Optional(Type.Unsafe<AccessConfig>(ACCESS_CONFIG_SCHEMA)),
+}),
+// ...
+execute: async ({ calendar }, config, ctx) => {
+  const decision = checkAccess(config.access, "calendars", calendar, "read", ctx);
+  if (!decision.allowed) return { error: decision.message };
+  // ...
+},
+```
+
+The rules:
+
+- **No `access` block** (or no `access.<kind>`) allows everything, so existing configs keep working.
+- **Default-deny** applies once `access.<kind>` exists. An id that isn't listed, or an op with no list, is denied.
+- **A grant** is `"*"` or `{ agent?, sender? }`. Each field takes a string or a list. Every field in a grant must match, and any one matching grant allows the call.
+- **`agent`** is compared with `ctx.agentId`, and `"*"` matches any agent.
+- **`sender`** names an OpenClaw root-config access group (`type: "message.senders"`). It matches when the sender id is listed for the turn's channel, or under the group's `"*"` key. The special name `"owner"` matches `senderIsOwner === true`.
+- **Senderless turns** (cron, CLI) match only grants with no `sender` field.
+- **Malformed grants fail closed.** Unknown fields, empty grant objects and unknown group names never match.
+
+Sender ids are normalized on both sides before comparison:
+
+- Text is lowercased, which covers emails.
+- Prefixes such as `imessage:`, `discord:` and `tel:` are stripped.
+- Formatted phone numbers become E.164 (`+1 (425) 555-0100` becomes `+14255550100`), and so do bare 10- or 11-digit numbers on phone channels.
+
+A denial returns `{ allowed: false, message }` with a message like
+`Access denied: agent "family" / sender +14255550100 may not read calendar "nicole"`,
+and logs that line once through `ctx.logger`.
+
+Lower-level helpers are also exported: `canAccess`, `matchesGrant`,
+`matchesAnyGrant`, `isSenderInGroup`, `normalizeSenderId`,
+`isAccessControlled`, `describeCaller` and `buildToolCallContext`.
+
 ## Build setup
 
 Add to `package.json`:

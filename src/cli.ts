@@ -77,6 +77,29 @@ interface Tool {
 }
 
 /**
+ * Turn a registration into concrete tools for the CLI.
+ *
+ * `definePlugin` registers tool factories (so OpenClaw can pass trusted runtime
+ * context). The CLI has no runtime context, so factories are called with none:
+ * tools then see an empty `ctx` and behave as an unrestricted local caller.
+ */
+function resolveCliTools(tool: unknown): Tool[] {
+  if (typeof tool !== "function") return tool ? [tool as Tool] : [];
+  let built: unknown;
+  try {
+    built = (tool as (ctx?: unknown) => unknown)(undefined);
+  } catch {
+    built = undefined;
+  }
+  const list = (Array.isArray(built) ? built : [built]).filter(
+    (t): t is Tool => !!t && typeof (t as Tool).execute === "function" && typeof (t as Tool).name === "string",
+  );
+  if (list.length > 0) return list;
+  // Fall back to the static shape definePlugin attaches to its factories.
+  return typeof (tool as unknown as Partial<Tool>).execute === "function" ? [tool as unknown as Tool] : [];
+}
+
+/**
  * Options for the CLI runner.
  * These are set by the generated bin file — plugin authors never pass them manually.
  */
@@ -399,7 +422,7 @@ export async function run(entry: PluginEntry, options: RunOptions = {}): Promise
   const tools: Tool[] = [];
   const config = buildConfigFromEnv(envPrefix, entry.configSchema);
   entry.register({
-    registerTool: (tool: unknown) => tools.push(tool as Tool),
+    registerTool: (tool: unknown) => tools.push(...resolveCliTools(tool)),
     pluginConfig: config,
   });
 
