@@ -247,3 +247,75 @@ describe("createAdapter contracts enforcement", () => {
     expect(entry.contracts?.tools).toEqual(["my_tool"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Model view (v3.2)
+// ---------------------------------------------------------------------------
+
+describe("formatResult with a view", () => {
+  it("uses the view as content and keeps the full value in details", () => {
+    const full = { items: [{ id: 1, attrs: { a: 1, b: 2 } }, { id: 2, attrs: { a: 3 } }] };
+    const result = formatResult(full, { ids: [1, 2] });
+    expect(JSON.parse(result.content[0].text)).toEqual({ ids: [1, 2] });
+    expect(result.details).toEqual(full);
+  });
+
+  it("accepts a string view", () => {
+    const result = formatResult({ big: "x".repeat(1000) }, "2 lights on");
+    expect(result.content[0].text).toBe("2 lights on");
+    expect((result.details as { big: string }).big).toHaveLength(1000);
+  });
+
+  it("is unchanged without a view", () => {
+    expect(formatResult({ a: 1 })).toEqual({ content: [{ type: "text", text: '{"a":1}' }], details: { a: 1 } });
+  });
+});
+
+describe("tool view()", () => {
+  const warnings: string[] = [];
+  const createEntry = definePlugin({
+    id: "view-plugin",
+    name: "View Plugin",
+    tools: (tool) => [
+      tool({
+        name: "list",
+        description: "List things.",
+        parameters: Type.Object({ fail: Type.Optional(Type.Boolean()), broken: Type.Optional(Type.Boolean()) }),
+        execute: async ({ fail }) =>
+          fail
+            ? { error: "upstream unavailable", detail: "x".repeat(50) }
+            : { output: [{ id: "a", state: "on", attributes: { big: "x".repeat(200) } }] },
+        view: (result, params) => {
+          if (params.broken) throw new Error("bad view");
+          return result.output.map((e: { id: string; state: string }) => `${e.id}: ${e.state}`).join("\n");
+        },
+      }),
+    ],
+  });
+
+  async function load() {
+    const tools: Record<string, any> = {};
+    createEntry().register({
+      registerTool: (t: any) => { tools[t.name] = t; },
+      logger: { warn: (m: string) => warnings.push(m) },
+    } as any);
+    return tools;
+  }
+
+  it("sends the model the view and keeps details full", async () => {
+    const result = await (await load())["list"].execute("1", {});
+    expect(result.content[0].text).toBe("a: on");
+    expect(result.details.output[0].attributes.big).toHaveLength(200);
+  });
+
+  it("never applies the view to a failure", async () => {
+    const result = await (await load())["list"].execute("1", { fail: true });
+    expect(JSON.parse(result.content[0].text).error).toBe("upstream unavailable");
+  });
+
+  it("falls back to the full result when the view throws", async () => {
+    const result = await (await load())["list"].execute("1", { broken: true });
+    expect(JSON.parse(result.content[0].text).output[0].id).toBe("a");
+    expect(warnings.some((w) => w.includes("view() threw"))).toBe(true);
+  });
+});

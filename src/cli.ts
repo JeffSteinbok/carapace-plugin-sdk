@@ -290,6 +290,12 @@ function printHelp(entry: PluginEntry, tools: Tool[], binName: string, envPrefix
 function formatPretty(result: unknown): string {
   if (result == null) return "";
 
+  // People at a terminal get the full result: `details`, not the model's view.
+  const details = (result as { details?: unknown })?.details;
+  if (details !== undefined && details !== null && !(typeof details === "object" && Object.keys(details as object).length === 0)) {
+    return typeof details === "string" ? details : formatPrettyValue(details);
+  }
+
   // Unwrap the standard formatResult() envelope.
   const content = (result as { content?: { text?: string }[] })?.content;
   if (Array.isArray(content) && content[0]?.text) {
@@ -463,7 +469,13 @@ export async function run(entry: PluginEntry, options: RunOptions = {}): Promise
     const result = await tool.execute("cli", params);
 
     if (json) {
-      // Raw JSON output — unwrap the formatResult envelope if present.
+      // Raw JSON output: the full result (`details`), not the model's view.
+      const details = (result as { details?: unknown })?.details;
+      if (details !== undefined && details !== null && !(typeof details === "object" && Object.keys(details as object).length === 0)) {
+        console.log(typeof details === "string" ? details : JSON.stringify(details, null, 2));
+        return;
+      }
+      // Otherwise unwrap the formatResult envelope if present.
       const content = (result as { content?: { text?: string }[] })?.content;
       if (Array.isArray(content) && content[0]?.text) {
         try {
