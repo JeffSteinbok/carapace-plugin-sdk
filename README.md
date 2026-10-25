@@ -74,6 +74,35 @@ Since v3, the value you return is also the result's `details`. OpenClaw grades a
 
 Upgrading from v2 needs no code changes unless a tool returns one of those keys as ordinary data.
 
+## Compact results for the model (v3.2)
+
+Whatever `execute` returns is what the model reads, in full. For tools whose raw output is much bigger than what an
+agent needs (a list of every Home Assistant entity with all its attributes, a week of calendar events with full
+descriptions), that is wasted context on every call. Add `view` to send the model something smaller:
+
+```ts
+tool({
+  name: "list_lights",
+  description: "List lights and their state.",
+  parameters: Type.Object({}),
+  execute: async (_params, config) => fetchAllLights(config),          // full objects
+  view: (lights) => lights.map((l) => `${l.name}: ${l.state}`).join("\n"),  // what the model reads
+}),
+```
+
+| | Without `view` | With `view` |
+|---|---|---|
+| `content` (what the model reads) | `execute`'s result as JSON | `view`'s value (object as JSON, or a string) |
+| `details` (Code Mode scripts, result grading) | `execute`'s result | `execute`'s result, unchanged |
+| Standalone CLI output | `execute`'s result | `execute`'s result (the CLI prints `details`) |
+
+- Failures (a top-level truthy `error`, `ok: false` or `success: false`) skip the view, so the model always sees the full
+  error.
+- If `view` throws, the full result is sent and a warning is logged; a bad view never breaks the tool.
+- `formatResult(data, view)` takes the same optional second argument for plugins that register tools themselves.
+
+Additive: tools without `view` behave exactly as before.
+
 ## Call context and access control (v3.1)
 
 Every tool's `execute` receives a third argument, `ctx`: a small frozen object

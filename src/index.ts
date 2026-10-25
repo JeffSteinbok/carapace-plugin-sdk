@@ -39,6 +39,7 @@ interface ToolDef {
   description: string;
   parameters: unknown;
   execute(params: Record<string, unknown>, config: unknown, ctx: ToolCallContext): Promise<unknown>;
+  view?(result: unknown, params: Record<string, unknown>): unknown;
 }
 
 /**
@@ -73,6 +74,17 @@ type ToolFactory<TConfig> = <TSchema extends TObject>(def: {
    * @returns Any JSON-serialisable value. The SDK wraps it in the OpenClaw result format.
    */
   execute(params: Static<TSchema>, config: TConfig, ctx: ToolCallContext): Promise<unknown>;
+  /**
+   * Optional compact view for the model (v3.2).
+   *
+   * Return what the model needs to read (a smaller object, or a string). The model
+   * gets this as the tool result's text; `details` still carries the full result
+   * from `execute`, so Code Mode scripts and result grading are unchanged. Use it
+   * when a tool's raw output is much larger than what an agent needs, e.g. a list
+   * of entities with every attribute. Not applied to failures (a top-level truthy
+   * `error` or `ok: false`), so the model always sees the full error.
+   */
+  view?(result: any, params: Static<TSchema>): unknown;
 }) => ToolDef;
 
 /**
@@ -185,8 +197,10 @@ function createToolFactory(toolDef: ToolDef, config: unknown, logger: ToolLogger
     description: toolDef.description,
     parameters: toolDef.parameters,
     // Wrap the result automatically — execute() returns plain values, not formatResult().
-    execute: async (_toolCallId: string, params: Record<string, unknown>) =>
-      formatResult(await toolDef.execute(params, config, resolveCtx())),
+    execute: async (_toolCallId: string, params: Record<string, unknown>) => {
+      const result = await toolDef.execute(params, config, resolveCtx());
+      return formatResult(result, modelView(toolDef, result, params, logger));
+    },
   });
 
   // The context is resolved per call so accessGroups come from the live runtime config.
@@ -276,33 +290,60 @@ export interface PluginEntry {
  * from it — so a top-level `ok: false`, truthy `error`, or failure-word
  * `status` (e.g. "failed", "unavailable") marks the call failed.
  *
+ * Pass `view` (v3.2) to give the model a compact text while `details` keeps the
+ * full `data`. Without it, both carry the same value, as before.
+ *
  * @param data - Anything JSON-serialisable, or a plain string.
+ * @param view - Optional model-facing value (object or string) to use as `content`.
  * @returns `{ content: [{ type: "text", text: "<json>" }], details: <data> }`
  */
-export function formatResult(data: unknown) {
-  let text: string;
-  let details: unknown = {};
-  if (typeof data === "string") {
-    text = data;
-    details = data;
-  } else {
-    try {
-      const json = JSON.stringify(data);
-      if (json === undefined) {
-        text = String(data);
-      } else {
-        text = json;
-        // Round-trip so details matches content exactly (Dates as strings, no functions).
-        details = JSON.parse(json);
-      }
-    } catch {
-      text = String(data);
-    }
-  }
+export function formatResult(data: unknown, view?: unknown) {
+  const full = serialize(data);
+  const text = view === undefined ? full.text : serialize(view).text;
   return {
     content: [{ type: "text" as const, text }],
-    details,
+    details: full.details,
   };
+}
+
+function serialize(data: unknown): { text: string; details: unknown } {
+  if (typeof data === "string") {
+    return { text: data, details: data };
+  }
+  try {
+    const json = JSON.stringify(data);
+    if (json === undefined) {
+      return { text: String(data), details: {} };
+    }
+    // Round-trip so details matches content exactly (Dates as strings, no functions).
+    return { text: json, details: JSON.parse(json) };
+  } catch {
+    return { text: String(data), details: {} };
+  }
+}
+
+/** True for results the SDK treats as failures; those always reach the model in full. */
+function isFailure(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const r = result as Record<string, unknown>;
+  return Boolean(r.error) || r.ok === false || r.success === false;
+}
+
+/** The tool's model view of `result`, or undefined to send the full result. */
+function modelView(
+  toolDef: ToolDef,
+  result: unknown,
+  params: Record<string, unknown>,
+  logger: ToolLogger | undefined,
+): unknown {
+  if (!toolDef.view || isFailure(result)) return undefined;
+  try {
+    return toolDef.view(result, params);
+  } catch (e) {
+    // A broken view must never break the tool: fall back to the full result.
+    logger?.warn?.(`${toolDef.name}: view() threw, sending the full result: ${(e as Error).message}`);
+    return undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------
