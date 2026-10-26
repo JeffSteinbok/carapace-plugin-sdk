@@ -113,6 +113,7 @@ derived from tool arguments.
 |-------|---------|
 | `agentId` | Agent running the tool (`"main"`, `"family"`, …) |
 | `sessionKey` | Session key of the turn |
+| `workspaceDir` | Workspace directory of the agent running the tool |
 | `messageChannel` | Inbound channel (`"imessage"`, `"discord"`, …), lowercased |
 | `requesterSenderId` | Verified sender id. Absent for cron, CLI and heartbeat turns |
 | `senderIsOwner` | Trusted owner bit |

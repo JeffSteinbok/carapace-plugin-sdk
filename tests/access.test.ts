@@ -238,6 +238,14 @@ describe("helpers", () => {
     expect(buildToolCallContext(undefined)).toEqual({});
   });
 
+  it("buildToolCallContext passes workspaceDir through", () => {
+    expect(buildToolCallContext({ agentId: "main", workspaceDir: "/ws/main" })).toEqual({
+      agentId: "main",
+      workspaceDir: "/ws/main",
+    });
+    expect(buildToolCallContext({ workspaceDir: "  " })).toEqual({});
+  });
+
   it("ACCESS_CONFIG_SCHEMA is a JSON schema object", () => {
     expect(ACCESS_CONFIG_SCHEMA.type).toBe("object");
     expect(JSON.parse(JSON.stringify(ACCESS_CONFIG_SCHEMA))).toEqual(ACCESS_CONFIG_SCHEMA);

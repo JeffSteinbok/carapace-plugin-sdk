@@ -65,6 +65,8 @@ export interface ToolCallContext {
   /** Agent running the tool (e.g. "main", "family"). */
   readonly agentId?: string;
   readonly sessionKey?: string;
+  /** Workspace directory of the agent running the tool. */
+  readonly workspaceDir?: string;
   /** Message channel of the inbound turn (e.g. "imessage", "discord"). */
   readonly messageChannel?: string;
   /** Verified sender id of the inbound turn. Absent for cron/CLI turns. */
@@ -295,6 +297,7 @@ export function checkAccess(
 export interface HostToolContext {
   agentId?: string;
   sessionKey?: string;
+  workspaceDir?: string;
   messageChannel?: string;
   requesterSenderId?: string;
   senderIsOwner?: boolean;
@@ -328,6 +331,7 @@ export function buildToolCallContext(
   const ctx: ToolCallContext = {
     agentId: str(h.agentId),
     sessionKey: str(h.sessionKey),
+    workspaceDir: str(h.workspaceDir),
     messageChannel: str(h.messageChannel)?.toLowerCase(),
     requesterSenderId: str(h.requesterSenderId),
     senderIsOwner: typeof h.senderIsOwner === "boolean" ? h.senderIsOwner : undefined,
